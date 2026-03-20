@@ -52,4 +52,14 @@ public interface SetLogDao {
 
     @Query("SELECT * FROM set_logs ORDER BY sessionId, exerciseTemplateId, setNumber ASC")
     List<SetLog> getAllSetLogsSync();
+
+    @Query("SELECT sl.* FROM set_logs sl " +
+            "INNER JOIN sessions s ON sl.sessionId = s.id " +
+            "WHERE sl.exerciseTemplateId = :exerciseId AND s.id = (" +
+            "  SELECT s2.id FROM sessions s2 " +
+            "  INNER JOIN set_logs sl2 ON sl2.sessionId = s2.id " +
+            "  WHERE sl2.exerciseTemplateId = :exerciseId " +
+            "  ORDER BY s2.date DESC LIMIT 1" +
+            ") ORDER BY sl.setNumber ASC")
+    List<SetLog> getLastSetLogsForExercise(int exerciseId);
 }

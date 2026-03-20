@@ -139,20 +139,29 @@ public class SessionViewModel extends AndroidViewModel {
 
         SetEntry set = current.get(exerciseIndex).sets.get(setIndex);
         set.weight = weight;
-        set.weight = weight;
         set.reps = reps;
         set.isCompleted = isCompleted;
     }
 
     public void addExercise(ExerciseTemplate exercise) {
-        List<SessionExerciseEntry> current = sessionExercises.getValue();
-        if (current == null) return;
+        executor.execute(() -> {
+            List<SetLog> lastLogs = setLogDao.getLastSetLogsForExercise(exercise.getId());
+            List<SetEntry> initialSets = new ArrayList<>();
 
-        List<SetEntry> initialSets = new ArrayList<>();
-        initialSets.add(new SetEntry(1, 0f, 0));
-        
-        current.add(new SessionExerciseEntry(exercise, initialSets));
-        sessionExercises.postValue(current);
+            if (lastLogs != null && !lastLogs.isEmpty()) {
+                for (SetLog log : lastLogs) {
+                    initialSets.add(new SetEntry(log.getSetNumber(), (float) log.getWeight(), log.getReps()));
+                }
+            } else {
+                initialSets.add(new SetEntry(1, 0f, 0));
+            }
+
+            List<SessionExerciseEntry> current = sessionExercises.getValue();
+            if (current != null) {
+                current.add(new SessionExerciseEntry(exercise, initialSets));
+                sessionExercises.postValue(current);
+            }
+        });
     }
 
     public void removeExercise(int exerciseIndex) {
