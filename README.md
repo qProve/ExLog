@@ -4,7 +4,7 @@
   <p><b>A modern, local-first Android Workout Tracker built for speed and efficiency.</b></p>
   
   [![Version](https://img.shields.io/badge/Version-1.3.x-blue.svg)](https://github.com/qProve-P/ExLog)
-  [![Platform](https://img.shields.io/badge/Platform-Android-4ECDC4.svg?logo=android)](https://github.com/qProve-P/ExLog)
+  [![Platform](https://img.shields.io/badge/Platform-Android-4ECDC4.svg?logo=android)](https://www.android.com)
   [![License](https://img.shields.io/badge/License-GPL_3.0-green.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 </div>
