@@ -101,7 +101,7 @@ public class HistoryAdapter extends RecyclerView.Adapter<HistoryAdapter.ViewHold
 
         void bind(SessionDao.SessionHistoryItem item) {
             nameText.setText(item.workoutName);
-            dateText.setText(DateFormat.format("dd.MM yyyy - HH:mm", new Date(item.date)));
+            dateText.setText(DateFormat.format("dd.MM yyyy", new Date(item.date)));
             durationText.setText("Duration: " + formatDuration(item.durationMs));
         }
     }
