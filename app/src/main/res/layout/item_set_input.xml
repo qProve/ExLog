@@ -2,8 +2,8 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
     android:gravity="center_vertical"
+    android:orientation="horizontal"
     android:paddingVertical="4dp">
 
     <TextView
@@ -15,25 +15,49 @@
         android:textSize="14sp"
         android:textStyle="bold" />
 
-    <NumberPicker
-        android:id="@+id/picker_weight"
+    <FrameLayout
         android:layout_width="0dp"
         android:layout_height="100dp"
-        android:layout_weight="2"
-        android:layout_marginHorizontal="4dp" />
+        android:layout_marginHorizontal="4dp"
+        android:layout_weight="2">
 
-    <NumberPicker
-        android:id="@+id/picker_reps"
+        <NumberPicker
+            android:id="@+id/picker_weight"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/prev_weight"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end" />
+
+    </FrameLayout>
+
+    <FrameLayout
         android:layout_width="0dp"
         android:layout_height="100dp"
-        android:layout_weight="2"
-        android:layout_marginHorizontal="4dp" />
+        android:layout_marginHorizontal="4dp"
+        android:layout_weight="2">
+
+        <NumberPicker
+            android:id="@+id/picker_reps"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/prev_reps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end" />
+
+    </FrameLayout>
 
     <com.google.android.material.checkbox.MaterialCheckBox
         android:id="@+id/checkbox_completed"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:layout_gravity="center" />
+        android:layout_gravity="center"
+        android:layout_weight="1" />
 
 </LinearLayout>

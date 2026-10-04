@@ -1,5 +1,8 @@
 package com.qprovep.exlog.ui.session;
 
+import android.app.Application;
+import android.os.Looper;
+import android.os.Handler;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,12 +18,20 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.checkbox.MaterialCheckBox;
 import com.qprovep.exlog.R;
+import com.qprovep.exlog.data.AppDatabase;
+import com.qprovep.exlog.data.dao.SetLogDao;
 import com.qprovep.exlog.data.entity.ExerciseTemplate;
+import com.qprovep.exlog.data.entity.SetLog;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import android.util.Log;
 
 public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHolder> {
 
@@ -29,6 +40,10 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
     private final Set<Integer> expandedPositions = new HashSet<>();
     private final Set<Integer> infoOpenPositions = new HashSet<>();
     private boolean firstBindDone = false;
+    private final SetLogDao setLogDao;
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Map<Integer, List<SetLog>> lastLogCache = new HashMap<>();
 
     public interface OnDragStartListener {
         void onDragStarted(RecyclerView.ViewHolder viewHolder);
@@ -64,6 +79,8 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
 
     public SessionAdapter(SessionViewModel viewModel) {
         this.viewModel = viewModel;
+        AppDatabase db = AppDatabase.getInstance(viewModel.getApplication());
+        setLogDao = db.setLogDao();
     }
 
     public void setExercises(List<SessionViewModel.SessionExerciseEntry> exercises) {
@@ -161,6 +178,7 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
         }
 
         void bind(SessionViewModel.SessionExerciseEntry entry, final int exerciseIndex) {
+            final int exerciseId = entry.exercise.getId();
             nameText.setText(entry.exercise.getName());
 
             dragHandle.setOnTouchListener((v, event) -> {
@@ -214,6 +232,11 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
             setsContainer.removeAllViews();
             LayoutInflater inflater = LayoutInflater.from(itemView.getContext());
 
+            final List<SetLog>[] cached = new List[1];
+            synchronized (lastLogCache) {
+                cached[0] = lastLogCache.get(exerciseId);
+            }
+
             for (int i = 0; i < entry.sets.size(); i++) {
                 final int setIndex = i;
                 SessionViewModel.SetEntry set = entry.sets.get(i);
@@ -223,6 +246,20 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
                 NumberPicker weightPicker = setRow.findViewById(R.id.picker_weight);
                 NumberPicker repsPicker = setRow.findViewById(R.id.picker_reps);
                 MaterialCheckBox checkbox = setRow.findViewById(R.id.checkbox_completed);
+                TextView prevWeight = setRow.findViewById(R.id.prev_weight);
+                TextView prevReps = setRow.findViewById(R.id.prev_reps);
+
+                if (cached[0] != null) {
+                    applyLastLog(cached[0], setIndex, prevWeight, prevReps);
+                } else {
+                    executor.execute(() -> {
+                        List<SetLog> lastLogs = setLogDao.getLastSetLogsForExercise(entry.exercise.getId());
+                        synchronized (lastLogCache) {
+                            lastLogCache.put(exerciseId, lastLogs);
+                        }
+                        mainHandler.post(() -> applyLastLog(lastLogs, setIndex, prevWeight, prevReps));
+                    });
+                }
 
                 setNum.setText(String.valueOf(set.setNumber));
 
@@ -261,11 +298,31 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
                     }
                 });
 
+                prevWeight.setOnClickListener(v -> {
+                    setSetLikeLastSession(exerciseIndex, setIndex, prevWeight, weightPicker, prevReps, repsPicker, checkbox);
+                });
+
+                prevReps.setOnClickListener(v -> {
+                    setSetLikeLastSession(exerciseIndex, setIndex, prevWeight, weightPicker, prevReps, repsPicker, checkbox);
+                });
+
                 setsContainer.addView(setRow);
             }
 
             btnAddSet.setOnClickListener(v -> viewModel.addSet(exerciseIndex));
             btnRemoveSet.setOnClickListener(v -> viewModel.removeSet(exerciseIndex));
+        }
+
+        private void applyLastLog(List<SetLog> lastLogs, int setIndex, TextView prevWeight, TextView prevReps) {
+            if (lastLogs == null || lastLogs.isEmpty() || setIndex >= lastLogs.size()) {
+                prevWeight.setText("");
+                prevReps.setText("");
+                return;
+            };
+
+            SetLog last = lastLogs.get(setIndex);
+            prevWeight.setText(String.valueOf(last.getWeight()));
+            prevReps.setText(String.valueOf(last.getReps()));
         }
 
         private void bindInfoSection(ExerciseTemplate exercise, boolean visible) {
@@ -291,6 +348,48 @@ public class SessionAdapter extends RecyclerView.Adapter<SessionAdapter.ViewHold
             } else {
                 infoLink.setVisibility(View.GONE);
             }
+        }
+    }
+
+    private void setSetLikeLastSession(
+            int excerciseInd,
+            int setInd,
+            TextView prevWeight,
+            NumberPicker weightPicker,
+            TextView prevReps,
+            NumberPicker repsPicker,
+            MaterialCheckBox chbox
+    ) {
+        float w = parseWeight(prevWeight.getText().toString());
+        int r = parseInt(prevReps.getText().toString());
+
+        if (w < 0 && r < 0) return;
+
+        if (w >= 0) weightPicker.setValue(weightToPickerIndex(w));
+        if (r >= 0) repsPicker.setValue(r);
+
+        viewModel.updateSet(
+            excerciseInd,
+            setInd,
+            pickerIndexToWeight(weightPicker.getValue()),
+            repsPicker.getValue(),
+            chbox.isChecked()
+        );
+    }
+
+    private float parseWeight(String weight) {
+        try {
+            return Float.parseFloat(weight.replace(',', '.'));
+        } catch (NumberFormatException e) {
+            return -1f;
+        }
+    }
+
+    private int parseInt(String reps) {
+        try {
+            return Integer.parseInt(reps.trim());
+        } catch (NumberFormatException e) {
+            return -1;
         }
     }
 }
