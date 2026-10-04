@@ -143,9 +143,10 @@ public class SessionFragment extends Fragment {
 
         viewModel.getElapsedTime().observe(getViewLifecycleOwner(), millis -> {
             long seconds = millis / 1000;
-            long mins = seconds / 60;
             long secs = seconds % 60;
-            timerText.setText(String.format(Locale.getDefault(), "%02d:%02d", mins, secs));
+            long mins = (seconds / 60) % 60;
+            long hours = seconds / 3600;
+            timerText.setText(String.format(Locale.getDefault(), "%02d:%02d:%02d", hours, mins, secs));
         });
 
         viewModel.isTimerPaused().observe(getViewLifecycleOwner(), paused -> {
