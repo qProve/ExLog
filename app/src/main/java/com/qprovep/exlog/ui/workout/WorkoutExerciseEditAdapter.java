@@ -21,11 +21,29 @@ import java.util.List;
 
 public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExerciseEditAdapter.ViewHolder> {
 
+    public static class RotationItem {
+        public ExerciseTemplate exercise;
+        public int sessionCount;
+        public double referenceWeight;
+        public int targetSets;
+        public int targetReps;
+
+        public RotationItem(ExerciseTemplate exercise, int sessionCount,
+                            double referenceWeight, int targetSets, int targetReps) {
+            this.exercise = exercise;
+            this.sessionCount = sessionCount;
+            this.referenceWeight = referenceWeight;
+            this.targetSets = targetSets;
+            this.targetReps = targetReps;
+        }
+    }
+
     public static class ExerciseEntry {
         public ExerciseTemplate exercise;
         public double referenceWeight;
         public int targetSets;
         public int targetReps;
+        public final List<WorkoutExerciseEditAdapter.RotationItem> rotation = new ArrayList<>();
 
         public ExerciseEntry(ExerciseTemplate exercise, double referenceWeight, int targetSets, int targetReps) {
             this.exercise = exercise;
@@ -35,8 +53,35 @@ public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExer
         }
     }
 
+    public static RotationItem resolveActive(ExerciseEntry entry, int sessionsDone) {
+        if (entry.rotation.isEmpty()) {
+            return new RotationItem(entry.exercise, 1, entry.referenceWeight, entry.targetSets, entry.targetReps);
+        }
+
+        int total = 0;
+        for (RotationItem item : entry.rotation) {
+            total += Math.max(1, item.sessionCount);
+        }
+        int pos = sessionsDone % total;
+
+        int acc = 0;
+        for (RotationItem item : entry.rotation) {
+            acc += Math.max(1, item.sessionCount);
+            if (pos < acc) return item;
+        }
+        return entry.rotation.get(0);
+    }
+
     private final List<ExerciseEntry> entries = new ArrayList<>();
     private OnDragStartListener dragStartListener;
+
+    public interface  OnRotationClickListener {
+        void onRotationClicked(int position, ExerciseEntry entry);
+    }
+    private OnRotationClickListener rotationClickListener;
+    public void setRotationClickListener(OnRotationClickListener listener) {
+        this.rotationClickListener = listener;
+    }
 
     public interface OnDragStartListener {
         void onDragStarted(RecyclerView.ViewHolder viewHolder);
@@ -109,6 +154,16 @@ public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExer
         return entries.size();
     }
 
+    private static String formatRotation(ExerciseEntry entry) {
+        StringBuilder sb = new StringBuilder("↻ ");
+        for (int i = 0; i < entry.rotation.size(); i++) {
+            RotationItem item = entry.rotation.get(i);
+            if (i > 0) sb.append(" → ");
+            sb.append(item.sessionCount).append("× ").append(item.exercise.getName());
+        }
+        return sb.toString();
+    }
+
     class ViewHolder extends RecyclerView.ViewHolder {
         private final TextView nameText;
         private final EditText refWeightEdit;
@@ -116,6 +171,8 @@ public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExer
         private final EditText targetRepsEdit;
         private final ImageButton removeBtn;
         public final ImageView dragHandle;
+        private final ImageButton rotationBtn;
+        private final TextView rotationSummary;
         private ExerciseEntry currentEntry;
 
         ViewHolder(@NonNull View itemView) {
@@ -126,6 +183,8 @@ public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExer
             targetRepsEdit = itemView.findViewById(R.id.edit_target_reps);
             removeBtn = itemView.findViewById(R.id.btn_remove);
             dragHandle = itemView.findViewById(R.id.drag_handle);
+            rotationBtn = itemView.findViewById(R.id.btn_rotation);
+            rotationSummary = itemView.findViewById(R.id.rotation_summary);
 
             removeBtn.setOnClickListener(v -> {
                 int pos = getAdapterPosition();
@@ -135,15 +194,27 @@ public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExer
                 }
             });
 
+            rotationBtn.setOnClickListener(v -> {
+                int pos = getAdapterPosition();
+                if (pos != RecyclerView.NO_POSITION && rotationClickListener != null) {
+                    rotationClickListener.onRotationClicked(pos, entries.get(pos));
+                }
+            });
+
             refWeightEdit.addTextChangedListener(new SimpleTextWatcher() {
                 @Override
                 public void afterTextChanged(Editable s) {
-                    if (currentEntry != null) {
-                        try {
-                            currentEntry.referenceWeight = Double.parseDouble(s.toString());
-                        } catch (NumberFormatException e) {
-                            currentEntry.referenceWeight = 0;
-                        }
+                    if (currentEntry == null) return;
+                    double val;
+                    try {
+                        val = Double.parseDouble(s.toString());
+                    } catch (NumberFormatException e) {
+                        val = 0;
+                    }
+                    if (currentEntry.rotation.isEmpty()) {
+                        currentEntry.referenceWeight = val;
+                    } else {
+                        currentEntry.rotation.get(0).referenceWeight = val;
                     }
                 }
             });
@@ -151,12 +222,17 @@ public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExer
             targetSetsEdit.addTextChangedListener(new SimpleTextWatcher() {
                 @Override
                 public void afterTextChanged(Editable s) {
-                    if (currentEntry != null) {
-                        try {
-                            currentEntry.targetSets = Integer.parseInt(s.toString());
-                        } catch (NumberFormatException e) {
-                            currentEntry.targetSets = 0;
-                        }
+                    if (currentEntry == null) return;
+                    int val;
+                    try {
+                        val = Integer.parseInt(s.toString());
+                    } catch (NumberFormatException e) {
+                        val = 0;
+                    }
+                    if (currentEntry.rotation.isEmpty()) {
+                        currentEntry.targetSets = val;
+                    } else {
+                        currentEntry.rotation.get(0).targetSets = val;
                     }
                 }
             });
@@ -164,12 +240,17 @@ public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExer
             targetRepsEdit.addTextChangedListener(new SimpleTextWatcher() {
                 @Override
                 public void afterTextChanged(Editable s) {
-                    if (currentEntry != null) {
-                        try {
-                            currentEntry.targetReps = Integer.parseInt(s.toString());
-                        } catch (NumberFormatException e) {
-                            currentEntry.targetReps = 0;
-                        }
+                    if (currentEntry == null) return;
+                    int val;
+                    try {
+                        val = Integer.parseInt(s.toString());
+                    } catch (NumberFormatException e) {
+                        val = 0;
+                    }
+                    if (currentEntry.rotation.isEmpty()) {
+                        currentEntry.targetReps = val;
+                    } else {
+                        currentEntry.rotation.get(0).targetReps = val;
                     }
                 }
             });
@@ -178,9 +259,24 @@ public class WorkoutExerciseEditAdapter extends RecyclerView.Adapter<WorkoutExer
         void bind(ExerciseEntry entry) {
             currentEntry = entry;
             nameText.setText(entry.exercise.getName());
-            refWeightEdit.setText(entry.referenceWeight > 0 ? String.valueOf(entry.referenceWeight) : "");
-            targetSetsEdit.setText(entry.targetSets > 0 ? String.valueOf(entry.targetSets) : "");
-            targetRepsEdit.setText(entry.targetReps > 0 ? String.valueOf(entry.targetReps) : "");
+
+            double refWeight = entry.rotation.isEmpty()
+                    ? entry.referenceWeight : entry.rotation.get(0).referenceWeight;
+            int tSets = entry.rotation.isEmpty()
+                    ? entry.targetSets : entry.rotation.get(0).targetSets;
+            int tReps = entry.rotation.isEmpty()
+                    ? entry.targetReps : entry.rotation.get(0).targetReps;
+
+            refWeightEdit.setText(refWeight > 0 ? String.valueOf(refWeight) : "");
+            targetSetsEdit.setText(tSets > 0 ? String.valueOf(tSets) : "");
+            targetRepsEdit.setText(tReps > 0 ? String.valueOf(tReps) : "");
+
+            if (entry.rotation.isEmpty()) {
+                rotationSummary.setVisibility((View.GONE));
+            } else {
+                rotationSummary.setVisibility(View.VISIBLE);
+                rotationSummary.setText(formatRotation(entry));
+            }
         }
     }
 

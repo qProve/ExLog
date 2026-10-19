@@ -16,6 +16,9 @@ import com.qprovep.exlog.data.entity.ExerciseTemplate;
 import com.qprovep.exlog.data.entity.SetLog;
 import com.qprovep.exlog.data.entity.WorkoutTemplate;
 import com.qprovep.exlog.data.relation.SessionWithSetLogs;
+import com.qprovep.exlog.data.relation.RotationWithTemplate;
+import com.qprovep.exlog.data.relation.WorkoutExerciseWithTemplate;
+import com.qprovep.exlog.ui.workout.WorkoutExerciseEditAdapter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.Collections;
+import java.util.Comparator;
 
 public class SessionDetailViewModel extends AndroidViewModel {
 
@@ -51,20 +56,51 @@ public class SessionDetailViewModel extends AndroidViewModel {
         sessionData.observeForever(sessionWithLogs -> {
             if (sessionWithLogs != null) {
                 executor.execute(() -> {
-                    com.qprovep.exlog.data.relation.WorkoutWithExercises workoutData = workoutDao
-                            .getWorkoutWithExercisesSync(sessionWithLogs.session.getWorkoutTemplateId());
+                    Integer workoutId = sessionWithLogs.session.getWorkoutTemplateId();
+                    if (workoutId == null)
+                        return;
+
+                    com.qprovep.exlog.data.relation.WorkoutWithExercises workoutData = workoutDao.getWorkoutWithExercisesSync(workoutId);
 
                     if (workoutData != null) {
                         workoutTemplate.postValue(workoutData.workoutTemplate);
 
+                        int sessionsDone = Math.max(0, sessionDao.countSessionsForWorkoutUpTo(workoutId, sessionWithLogs.session.getId()) - 1);
+
                         Map<Integer, DetailExerciseEntry> map = new HashMap<>();
                         List<DetailExerciseEntry> orderedList = new ArrayList<>();
 
-                        for (com.qprovep.exlog.data.relation.WorkoutExerciseWithTemplate exWithTemplate : workoutData.exercises) {
-                            ExerciseTemplate ex = exWithTemplate.exerciseTemplate;
+                        List<WorkoutExerciseWithTemplate> sorted = new ArrayList<>(workoutData.exercises);
+                        Collections.sort(sorted, Comparator.comparingInt(w -> w.workoutExercise.getOrderIndex()));
+
+                        for (WorkoutExerciseWithTemplate we : sorted) {
+                            ExerciseTemplate ex = we.exerciseTemplate;
+                            int targetSets = we.workoutExercise.getTargetSets();
+
+                            if (we.rotation != null && we.rotation.size() > 1) {
+                                WorkoutExerciseEditAdapter.ExerciseEntry tmp = new WorkoutExerciseEditAdapter.ExerciseEntry(
+                                        ex,
+                                        we.workoutExercise.getReferenceWeight(), targetSets,
+                                        we.workoutExercise.getTargetReps()
+                                );
+                                List<RotationWithTemplate> rotSorted = new ArrayList<>(we.rotation);
+                                Collections.sort(rotSorted, Comparator.comparingInt(
+                                        r -> r.rotationItem.getOrderIndex()));
+                                for (RotationWithTemplate r : rotSorted) {
+                                    tmp.rotation.add(new WorkoutExerciseEditAdapter.RotationItem(
+                                            r.exerciseTemplate,
+                                            r.rotationItem.getSessionCount(),
+                                            r.rotationItem.getReferenceWeight(),
+                                            r.rotationItem.getTargetSets(),
+                                            r.rotationItem.getTargetReps()));
+                                }
+                                WorkoutExerciseEditAdapter.RotationItem active = WorkoutExerciseEditAdapter.resolveActive(tmp, sessionsDone);
+                                ex = active.exercise;
+                                targetSets = active.targetSets;
+                            }
+
                             if (ex != null && !map.containsKey(ex.getId())) {
-                                DetailExerciseEntry entry = new DetailExerciseEntry(ex,
-                                        exWithTemplate.workoutExercise.getTargetSets());
+                                DetailExerciseEntry entry = new DetailExerciseEntry(ex, targetSets);
                                 map.put(ex.getId(), entry);
                                 orderedList.add(entry);
                             }

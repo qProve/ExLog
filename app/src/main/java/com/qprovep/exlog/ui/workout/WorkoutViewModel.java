@@ -11,6 +11,7 @@ import com.qprovep.exlog.data.dao.ExerciseTemplateDao;
 import com.qprovep.exlog.data.dao.WorkoutExerciseDao;
 import com.qprovep.exlog.data.dao.WorkoutTemplateDao;
 import com.qprovep.exlog.data.entity.ExerciseTemplate;
+import com.qprovep.exlog.data.entity.RotationItem;
 import com.qprovep.exlog.data.entity.WorkoutExercise;
 import com.qprovep.exlog.data.entity.WorkoutTemplate;
 import com.qprovep.exlog.data.relation.WorkoutWithExercises;
@@ -50,27 +51,41 @@ public class WorkoutViewModel extends AndroidViewModel {
         return workoutDao.getWorkoutWithExercises(workoutId);
     }
 
-    public void insertWorkout(WorkoutTemplate workout, List<WorkoutExercise> exercises,
-            OnWorkoutSavedListener listener) {
+    public void insertWorkout(WorkoutTemplate workout, List<WorkoutExercise> exercises, OnWorkoutSavedListener listener, List<List<RotationItem>> rotations) {
         executor.execute(() -> {
             long id = workoutDao.insert(workout);
-            for (WorkoutExercise we : exercises) {
+            for (int i = 0; i < exercises.size(); i++) {
+                WorkoutExercise we = exercises.get(i);
                 we.setWorkoutTemplateId((int) id);
+                long weId = workoutExerciseDao.insert(we);
+                List<RotationItem> rot = rotations != null ? rotations.get(i) : null;
+                if (rot != null && !rot.isEmpty()) {
+                    for (RotationItem r : rot) {
+                        r.setWorkoutExerciseId((int) weId);
+                    }
+                    workoutExerciseDao.insertRotations(rot);
+                }
             }
-            workoutExerciseDao.insertAll(exercises);
-            if (listener != null)
-                listener.onSaved((int) id);
+            if (listener != null) listener.onSaved((int) id);
         });
     }
 
-    public void updateWorkout(WorkoutTemplate workout, List<WorkoutExercise> exercises) {
+    public void updateWorkout(WorkoutTemplate workout, List<WorkoutExercise> exercises, List<List<RotationItem>> rotations) {
         executor.execute(() -> {
             workoutDao.update(workout);
             workoutExerciseDao.deleteAllForWorkout(workout.getId());
-            for (WorkoutExercise we : exercises) {
+            for (int i = 0; i < exercises.size(); i++) {
+                WorkoutExercise we = exercises.get(i);
                 we.setWorkoutTemplateId(workout.getId());
+                long weId = workoutExerciseDao.insert(we);
+                List<RotationItem> rot = rotations != null ? rotations.get(i) : null;
+                if (rot != null && !rot.isEmpty()) {
+                    for (RotationItem r : rot) {
+                        r.setWorkoutExerciseId((int) weId);
+                    }
+                    workoutExerciseDao.insertRotations(rot);
+                }
             }
-            workoutExerciseDao.insertAll(exercises);
         });
     }
 

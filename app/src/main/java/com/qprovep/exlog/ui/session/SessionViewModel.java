@@ -24,6 +24,12 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import com.qprovep.exlog.data.relation.RotationWithTemplate;
+import com.qprovep.exlog.data.relation.WorkoutExerciseWithTemplate;
+import com.qprovep.exlog.ui.workout.WorkoutExerciseEditAdapter;
+import java.util.Collections;
+import java.util.Comparator;
+
 public class SessionViewModel extends AndroidViewModel {
 
     private final SessionDao sessionDao;
@@ -78,14 +84,43 @@ public class SessionViewModel extends AndroidViewModel {
 
             currentWorkout.postValue(data.workoutTemplate);
 
+            int sessionsDone = sessionDao.countSessionsForWorkoutSync(workoutId);
+
             List<SessionExerciseEntry> entries = new ArrayList<>();
-            for (var we : data.exercises) {
-                List<SetEntry> sets = new ArrayList<>();
-                for (int i = 0; i < we.workoutExercise.getTargetSets(); i++) {
-                    sets.add(new SetEntry(i + 1, (float) we.workoutExercise.getReferenceWeight(),
-                            we.workoutExercise.getTargetReps()));
+
+            List<WorkoutExerciseWithTemplate> sorted = new ArrayList<>(data.exercises);
+            Collections.sort(sorted, Comparator.comparingInt(we -> we.workoutExercise.getOrderIndex()));
+
+            for (WorkoutExerciseWithTemplate we : sorted) {
+                ExerciseTemplate activeExercise = we.exerciseTemplate;
+                double refWeight = we.workoutExercise.getReferenceWeight();
+                int tSets = we.workoutExercise.getTargetSets();
+                int tReps = we.workoutExercise.getTargetReps();
+
+                if (we.rotation != null && we.rotation.size() > 1) {
+                    WorkoutExerciseEditAdapter.ExerciseEntry tmp = new WorkoutExerciseEditAdapter.ExerciseEntry(we.exerciseTemplate, refWeight, tSets, tReps);
+                    List<RotationWithTemplate> rotSorted = new ArrayList<>(we.rotation);
+                    Collections.sort(rotSorted, Comparator.comparingInt(r -> r.rotationItem.getOrderIndex()));
+                    for (RotationWithTemplate r : rotSorted) {
+                        tmp.rotation.add(new WorkoutExerciseEditAdapter.RotationItem(
+                                r.exerciseTemplate,
+                                r.rotationItem.getSessionCount(),
+                                r.rotationItem.getReferenceWeight(),
+                                r.rotationItem.getTargetSets(),
+                                r.rotationItem.getTargetReps()));
+                    }
+                    WorkoutExerciseEditAdapter.RotationItem active = WorkoutExerciseEditAdapter.resolveActive(tmp, sessionsDone);
+                    activeExercise = active.exercise;
+                    refWeight = active.referenceWeight;
+                    tSets = active.targetSets;
+                    tReps = active.targetReps;
                 }
-                entries.add(new SessionExerciseEntry(we.exerciseTemplate, sets));
+
+                List<SetEntry> sets = new ArrayList<>();
+                for (int i = 0; i < tSets; i++) {
+                    sets.add(new SetEntry(i + 1, (float) refWeight, tReps));
+                }
+                entries.add(new SessionExerciseEntry(activeExercise, sets));
             }
             sessionExercises.postValue(entries);
 

@@ -6,6 +6,7 @@ import androidx.room.Insert;
 import androidx.room.Query;
 import androidx.room.Update;
 
+import com.qprovep.exlog.data.entity.RotationItem;
 import com.qprovep.exlog.data.entity.WorkoutExercise;
 
 import java.util.List;
@@ -18,6 +19,9 @@ public interface WorkoutExerciseDao {
 
     @Insert
     void insertAll(List<WorkoutExercise> workoutExercises);
+
+    @Insert
+    void insertRotations(List<RotationItem> items);
 
     @Update
     void update(WorkoutExercise workoutExercise);
@@ -33,4 +37,7 @@ public interface WorkoutExerciseDao {
 
     @Query("SELECT * FROM workout_exercises ORDER BY workoutTemplateId, orderIndex ASC")
     List<WorkoutExercise> getAllWorkoutExercisesSync();
+
+    @Query("SELECT * FROM exercise_rotations WHERE workoutExerciseId = :workoutExerciseId ORDER BY orderIndex ASC")
+    List<RotationItem> getRotationsForWorkoutExercise(int workoutExerciseId);
 }

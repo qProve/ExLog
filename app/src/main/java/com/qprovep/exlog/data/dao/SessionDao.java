@@ -63,4 +63,10 @@ public interface SessionDao {
 
     @Insert
     void insertAll(List<Session> sessions);
+
+    @Query("SELECT COUNT(*) FROM sessions WHERE workoutTemplateId = :workoutId")
+    int countSessionsForWorkoutSync(int workoutId);
+
+    @Query("SELECT COUNT(*) FROM sessions WHERE workoutTemplateId = :workoutId AND id <= :sessionId")
+    int countSessionsForWorkoutUpTo(int workoutId, int sessionId);
 }
