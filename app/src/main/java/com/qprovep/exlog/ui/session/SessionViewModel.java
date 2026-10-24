@@ -207,6 +207,18 @@ public class SessionViewModel extends AndroidViewModel {
         sessionExercises.postValue(current);
     }
 
+    public void reorderExercises(List<SessionExerciseEntry> newOrder) {
+        List<SessionExerciseEntry> current = sessionExercises.getValue();
+        if (current == null) return;
+        if (newOrder.size() != current.size()) return;
+
+        for (SessionExerciseEntry entry : current) {
+            if (!newOrder.contains(entry)) return;
+        }
+
+        sessionExercises.postValue(new ArrayList<>(newOrder));
+    }
+
     public void swapExercises(int fromPosition, int toPosition) {
         List<SessionExerciseEntry> current = sessionExercises.getValue();
         if (current == null || fromPosition < 0 || toPosition < 0 || 

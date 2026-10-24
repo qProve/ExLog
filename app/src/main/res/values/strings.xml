@@ -91,4 +91,15 @@
     <string name="move_up">Move up</string>
     <string name="move_down">Move down</string>
     <string name="session_count">Sessions</string>
+    <string name="reorder_exercises">Reorder exercises</string>
+    <string name="delete_exercise">Delete exercise</string>
+    <string name="delete_exercise_title">Delete exercise?</string>
+    <string name="delete_exercise_message">Remove this exercise from the current session?</string>
+    <string name="no_session_exercises">No exercises in this session. Tap ⋮ to add one!</string>
+    <string name="set_position">SET %d / %d</string>
+    <string name="prev_exercise">Previous exercise</string>
+    <string name="next_exercise">Next exercise</string>
+    <string name="prev_set">Previous set</string>
+    <string name="next_set">Next set</string>
+    <string name="last_session_label">Last session</string>
 </resources>

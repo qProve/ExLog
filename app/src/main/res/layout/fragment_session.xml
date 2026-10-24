@@ -9,8 +9,8 @@
         android:id="@+id/session_toolbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="?attr/colorPrimary"
-        app:titleTextColor="?attr/colorOnPrimary"
+        android:background="?attr/colorSurface"
+        app:titleTextColor="?attr/colorPrimary"
         app:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
         app:popupTheme="@style/Theme.ExLog" />
 
@@ -41,13 +41,60 @@
 
     </LinearLayout>
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/session_exercises_recycler"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:padding="8dp"
-        android:clipToPadding="false" />
+        android:layout_weight="1">
+
+        <androidx.viewpager2.widget.ViewPager2
+            android:id="@+id/session_viewpager"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <ImageButton
+            android:id="@+id/session_arrow_prev"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_gravity="start|center_vertical"
+            android:elevation="4dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_chevron_left"
+            android:tint="?attr/colorPrimary"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/prev_exercise"
+            android:visibility="gone" />
+
+        <ImageButton
+            android:id="@+id/session_arrow_next"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_gravity="end|center_vertical"
+            android:elevation="4dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_chevron_right"
+            android:tint="?attr/colorPrimary"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/next_exercise"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/session_empty_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="@string/no_session_exercises"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+    <LinearLayout
+        android:id="@+id/session_dots"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingVertical="8dp" />
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btn_finish_session"

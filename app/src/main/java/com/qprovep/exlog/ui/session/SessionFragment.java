@@ -4,6 +4,8 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -16,6 +18,9 @@ import androidx.navigation.Navigation;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.viewpager2.widget.ViewPager2;
+
+import android.widget.ImageButton;
 
 import com.google.android.material.appbar.MaterialToolbar;
 import com.google.android.material.button.MaterialButton;
@@ -31,7 +36,6 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
-import android.widget.EditText;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -43,11 +47,17 @@ import java.util.Set;
 public class SessionFragment extends Fragment {
 
     private SessionViewModel viewModel;
-    private SessionAdapter adapter;
+    private SessionPagerAdapter adapter;
+    private ViewPager2 viewPager;
+    private LinearLayout dotsContainer;
+    private ImageButton arrowPrev;
+    private ImageButton arrowNext;
+    private TextView emptyText;
     private TextView timerText;
-    
+
     private List<ExerciseTemplate> allExercisesCached;
     private final List<String> categoriesCached = new ArrayList<>();
+    private boolean pendingScrollToLast = false;
 
     @Nullable
     @Override
@@ -69,45 +79,41 @@ public class SessionFragment extends Fragment {
 
         MaterialToolbar toolbar = view.findViewById(R.id.session_toolbar);
         timerText = view.findViewById(R.id.session_timer);
-        RecyclerView recyclerView = view.findViewById(R.id.session_exercises_recycler);
+        viewPager = view.findViewById(R.id.session_viewpager);
+        dotsContainer = view.findViewById(R.id.session_dots);
+        emptyText = view.findViewById(R.id.session_empty_text);
+        arrowPrev = view.findViewById(R.id.session_arrow_prev);
+        arrowNext = view.findViewById(R.id.session_arrow_next);
         MaterialButton finishBtn = view.findViewById(R.id.btn_finish_session);
         MaterialButton pauseResumeBtn = view.findViewById(R.id.btn_pause_resume);
 
-        recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
-        adapter = new SessionAdapter(viewModel);
-        recyclerView.setAdapter(adapter);
+        adapter = new SessionPagerAdapter(viewModel);
+        adapter.setAutoAdvanceListener((fromIndex, toIndex) ->
+                viewPager.setCurrentItem(toIndex, true));
+        adapter.setOnCompletionChanged(this::updateDots);
+        viewPager.setAdapter(adapter);
 
-        ItemTouchHelper touchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
-                ItemTouchHelper.UP | ItemTouchHelper.DOWN,
-                ItemTouchHelper.START | ItemTouchHelper.END
-        ) {
+        viewPager.registerOnPageChangeCallback(new ViewPager2.OnPageChangeCallback() {
             @Override
-            public boolean isLongPressDragEnabled() {
-                return false;
-            }
-
-            @Override
-            public boolean onMove(@NonNull RecyclerView recyclerView,
-                    @NonNull RecyclerView.ViewHolder viewHolder,
-                    @NonNull RecyclerView.ViewHolder target) {
-                adapter.onItemMove(viewHolder.getAdapterPosition(), target.getAdapterPosition());
-                return true;
-            }
-
-            @Override
-            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
-                int position = viewHolder.getAdapterPosition();
-                viewModel.removeExercise(position);
+            public void onPageSelected(int position) {
+                updateDots();
             }
         });
-        touchHelper.attachToRecyclerView(recyclerView);
 
-        adapter.setDragStartListener(touchHelper::startDrag);
+        arrowPrev.setOnClickListener(v -> goToExercise(-1));
+        arrowNext.setOnClickListener(v -> goToExercise(1));
 
         toolbar.inflateMenu(R.menu.menu_session);
         toolbar.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == R.id.action_add_exercise) {
+            int id = item.getItemId();
+            if (id == R.id.action_add_exercise) {
                 showExercisePicker();
+                return true;
+            } else if (id == R.id.action_reorder_exercises) {
+                showReorderDialog();
+                return true;
+            } else if (id == R.id.action_delete_exercise) {
+                confirmDeleteCurrentExercise();
                 return true;
             }
             return false;
@@ -138,6 +144,20 @@ public class SessionFragment extends Fragment {
         viewModel.getSessionExercises().observe(getViewLifecycleOwner(), entries -> {
             if (entries != null) {
                 adapter.setExercises(entries);
+                boolean empty = entries.isEmpty();
+                emptyText.setVisibility(empty ? View.VISIBLE : View.GONE);
+                viewPager.setVisibility(empty ? View.GONE : View.VISIBLE);
+                boolean multi = entries.size() > 1;
+                arrowPrev.setVisibility(multi ? View.VISIBLE : View.GONE);
+                arrowNext.setVisibility(multi ? View.VISIBLE : View.GONE);
+                rebuildDots(entries.size());
+                int position = viewPager.getCurrentItem();
+                if (position >= entries.size()) {
+                    viewPager.setCurrentItem(Math.max(0, entries.size() - 1), false);
+                } else if (pendingScrollToLast && !entries.isEmpty()) {
+                    pendingScrollToLast = false;
+                    viewPager.setCurrentItem(entries.size() - 1, true);
+                }
             }
         });
 
@@ -187,6 +207,132 @@ public class SessionFragment extends Fragment {
                 getArguments().remove("startWorkoutId");
             }
         }
+    }
+
+    private void goToExercise(int delta) {
+        int count = adapter.getItemCount();
+        if (count < 2) return;
+
+        int position = viewPager.getCurrentItem();
+        int target = (position + delta + count) % count;
+        boolean wraps = (delta > 0 && target == 0) || (delta < 0 && target == count - 1);
+        viewPager.setCurrentItem(target, !wraps);
+    }
+
+    private void rebuildDots(int count) {
+        dotsContainer.removeAllViews();
+        int size = getResources().getDimensionPixelSize(R.dimen.dot_size);
+        int margin = getResources().getDimensionPixelSize(R.dimen.dot_margin);
+        for (int i = 0; i < count; i++) {
+            View dot = new View(requireContext());
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(size, size);
+            params.setMargins(margin, margin, margin, margin);
+            dot.setLayoutParams(params);
+            dotsContainer.addView(dot);
+        }
+        updateDots();
+    }
+
+    private void updateDots() {
+        int count = dotsContainer.getChildCount();
+        int selected = viewPager.getCurrentItem();
+        float inactiveAlpha = getResources().getFloat(R.dimen.dot_inactive_alpha);
+        for (int i = 0; i < count; i++) {
+            View dot = dotsContainer.getChildAt(i);
+            if (adapter.isExerciseDone(i)) {
+                dot.setBackgroundResource(R.drawable.dot_done);
+                dot.setAlpha(1f);
+            } else {
+                dot.setBackgroundResource(R.drawable.dot_selected);
+                dot.setAlpha(i == selected ? 1f : inactiveAlpha);
+            }
+        }
+    }
+
+    private void confirmDeleteCurrentExercise() {
+        List<SessionExerciseEntry> entries = viewModel.getSessionExercises().getValue();
+        int position = viewPager.getCurrentItem();
+        if (entries == null || position < 0 || position >= entries.size()) {
+            Toast.makeText(requireContext(), "No exercise to delete", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String name = entries.get(position).exercise.getName();
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(getString(R.string.delete_exercise_title))
+                .setMessage(getString(R.string.delete_exercise_message) + "\n\n" + name)
+                .setPositiveButton(R.string.delete, (dialog, which) -> {
+                    viewModel.removeExercise(position);
+                    List<SessionExerciseEntry> remaining = viewModel.getSessionExercises().getValue();
+                    if (remaining != null && !remaining.isEmpty()) {
+                        int target = Math.min(position, remaining.size() - 1);
+                        viewPager.setCurrentItem(target, false);
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    private void showReorderDialog() {
+        List<SessionExerciseEntry> currentEntries = viewModel.getSessionExercises().getValue();
+        if (currentEntries == null || currentEntries.isEmpty()) {
+            Toast.makeText(requireContext(), "No exercises to reorder", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        View dialogView = LayoutInflater.from(requireContext())
+                .inflate(R.layout.dialog_reorder_exercises, null);
+
+        RecyclerView reorderRecycler = dialogView.findViewById(R.id.reorder_recycler);
+        reorderRecycler.setLayoutManager(new LinearLayoutManager(requireContext()));
+
+        ReorderExerciseAdapter reorderAdapter = new ReorderExerciseAdapter();
+        reorderAdapter.setEntries(currentEntries);
+        reorderRecycler.setAdapter(reorderAdapter);
+
+        ItemTouchHelper touchHelper = new ItemTouchHelper(new ItemTouchHelper.SimpleCallback(
+                ItemTouchHelper.UP | ItemTouchHelper.DOWN, 0) {
+            @Override
+            public boolean isLongPressDragEnabled() {
+                return false;
+            }
+
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView,
+                    @NonNull RecyclerView.ViewHolder viewHolder,
+                    @NonNull RecyclerView.ViewHolder target) {
+                reorderAdapter.onItemMove(viewHolder.getAdapterPosition(), target.getAdapterPosition());
+                return true;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int direction) {
+            }
+        });
+        touchHelper.attachToRecyclerView(reorderRecycler);
+        reorderAdapter.setDragStartListener(touchHelper::startDrag);
+
+        new MaterialAlertDialogBuilder(requireContext())
+                .setTitle(R.string.reorder_exercises)
+                .setView(dialogView)
+                .setPositiveButton(R.string.save, (dialog, which) -> {
+                    List<SessionExerciseEntry> reordered = reorderAdapter.getEntries();
+                    SessionExerciseEntry current = null;
+                    List<SessionExerciseEntry> entries = viewModel.getSessionExercises().getValue();
+                    int position = viewPager.getCurrentItem();
+                    if (entries != null && position >= 0 && position < entries.size()) {
+                        current = entries.get(position);
+                    }
+                    viewModel.reorderExercises(reordered);
+                    if (current != null) {
+                        int newIndex = reordered.indexOf(current);
+                        if (newIndex != -1) {
+                            viewPager.setCurrentItem(newIndex, false);
+                        }
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
 
     private void showDiscardDialog(View view) {
@@ -289,19 +435,15 @@ public class SessionFragment extends Fragment {
     }
 
     private void applySelectedExercises(Set<Integer> selectedIds, Set<Integer> previouslySelectedIds) {
-        RecyclerView recyclerView = getView() != null ? getView().findViewById(R.id.session_exercises_recycler) : null;
+        boolean added = false;
         for (ExerciseTemplate ex : allExercisesCached) {
             if (selectedIds.contains(ex.getId()) && !previouslySelectedIds.contains(ex.getId())) {
                 viewModel.addExercise(ex);
+                added = true;
             }
         }
-        
-        if (recyclerView != null) {
-            int size = viewModel.getSessionExercises().getValue() != null ? 
-                    viewModel.getSessionExercises().getValue().size() : 0;
-            if (size > 0) {
-                recyclerView.smoothScrollToPosition(size);
-            }
+        if (added) {
+            pendingScrollToLast = true;
         }
     }
 }

@@ -72,6 +72,9 @@ dependencies {
     // RecyclerView
     implementation(libs.recyclerview)
 
+    // ViewPager2
+    implementation(libs.viewpager2)
+
     // Gson (for export/import)
     implementation(libs.gson)
 

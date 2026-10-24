@@ -8,11 +8,12 @@
     <color name="primary_light">#FF8A80</color>
     <color name="secondary">#4ECDC4</color>
     <color name="secondary_dark">#36B5AD</color>
-    <color name="background_dark">#1A1A2E</color>
-    <color name="surface_dark">#16213E</color>
-    <color name="card_dark">#0F3460</color>
-    <color name="text_primary_dark">#EAEAEA</color>
-    <color name="text_secondary_dark">#B0B0B0</color>
+    <color name="pastel_green">#FF81C784</color>
+    <color name="background_dark">#000000</color>
+    <color name="surface_dark">#0A0A0A</color>
+    <color name="card_dark">#141414</color>
+    <color name="text_primary_dark">#D6D6D6</color>
+    <color name="text_secondary_dark">#9E9E9E</color>
     <color name="background_light">#F8F9FA</color>
     <color name="surface_light">#FFFFFF</color>
     <color name="card_light">#FFFFFF</color>
